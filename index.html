@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Ponche QR - Mini Delights</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script src="https://unpkg.com/@zxing/library@latest"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+  background: #f4f6f8;
+  padding: 20px;
+}
+video {
+  width: 100%;
+  max-width: 320px;
+  margin: 20px auto;
+}
+button {
+  padding: 14px 22px;
+  font-size: 16px;
+  background: #0d6efd;
+  color: white;
+  border: none;
+  border-radius: 6px;
+}
+#msg {
+  margin-top: 15px;
+  font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+
+<h2>📸 Ponche con Código QR</h2>
+<p>Presiona el botón y escanea tu QR</p>
+
+<button onclick="iniciar()">Abrir Cámara</button>
+
+<video id="video" autoplay muted playsinline></video>
+<div id="msg"></div>
+
+<script>
+const { createClient } = supabaseJs;
+
+const supabase = createClient(
+  "https://chwrkastzilaixqmjsbu.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNod3JrYXN0emlsYWl4cW1qc2J1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0MzcwOTYsImV4cCI6MjA4MzAxMzA5Nn0.QRimlOzaID5Ldr1CojiZYtqMzAKp2vm93QtzPxLEZ4I"
+);
+
+const codeReader = new ZXing.BrowserQRCodeReader();
+
+async function iniciar() {
+  document.getElementById("msg").innerText = "Abriendo cámara...";
+  try {
+    const devices = await codeReader.listVideoInputDevices();
+    const deviceId = devices[0].deviceId;
+
+    codeReader.decodeFromVideoDevice(
+      deviceId,
+      "video",
+      async (result, err) => {
+        if (result) {
+          codeReader.reset();
+          procesarQR(result.text);
+        }
+      }
+    );
+  } catch (e) {
+    document.getElementById("msg").innerText = "❌ No se pudo abrir la cámara";
+  }
+}
+
+async function procesarQR(qr) {
+  document.getElementById("msg").innerText = "Procesando...";
+
+  const { data: emp } = await supabase
+    .from("employees")
+    .select("*")
+    .eq("qr_code", qr)
+    .single();
+
+  if (!emp) {
+    document.getElementById("msg").innerText = "❌ QR inválido";
+    iniciar();
+    return;
+  }
+
+  const hoy = new Date().toISOString().slice(0,10);
+
+  const { data: punches } = await supabase
+    .from("punches")
+    .select("*")
+    .eq("employee_id", emp.id)
+    .eq("punch_date", hoy);
+
+  const tipo = (!punches || punches.length === 0) ? "entrada" : "salida";
+
+  await supabase.from("punches").insert({
+    employee_id: emp.id,
+    punch_type: tipo
+  });
+
+  document.getElementById("msg").innerText =
+    `✅ ${emp.name} - ${tipo.toUpperCase()} registrada`;
+}
+</script>
+
+</body>
+</html>
