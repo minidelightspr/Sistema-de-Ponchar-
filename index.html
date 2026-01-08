@@ -14,9 +14,6 @@ body {
   text-align: center;
   padding: 20px;
 }
-h2 {
-  margin-bottom: 5px;
-}
 #reader {
   width: 320px;
   margin: 20px auto;
@@ -48,8 +45,8 @@ button {
 <div id="msg"></div>
 
 <script>
-/* 🔑 CONEXIÓN A TU SUPABASE */
-const supabase = supabaseJs.createClient(
+/* 🔑 SUPABASE (CORRECTO) */
+const supabaseClient = supabase.createClient(
   "https://chwrkastzilaixqmjsbu.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNod3JrYXN0emlsYWl4cW1qc2J1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0MzcwOTYsImV4cCI6MjA4MzAxMzA5Nn0.QRimlOzaID5Ldr1CojiZYtqMzAKp2vm93QtzPxLEZ4I"
 );
@@ -61,7 +58,7 @@ async function onScanSuccess(qrText) {
 
   const qr = qrText.trim();
 
-  const { data: employee } = await supabase
+  const { data: employee } = await supabaseClient
     .from("employees")
     .select("*")
     .ilike("qr_code", qr)
@@ -75,7 +72,7 @@ async function onScanSuccess(qrText) {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data: punches } = await supabase
+  const { data: punches } = await supabaseClient
     .from("punches")
     .select("*")
     .eq("employee_id", employee.id)
@@ -98,7 +95,7 @@ async function onScanSuccess(qrText) {
     return;
   }
 
-  await supabase.from("punches").insert({
+  await supabaseClient.from("punches").insert({
     employee_id: employee.id,
     punch_type: type
   });
@@ -115,7 +112,6 @@ async function onScanSuccess(qrText) {
 }
 
 function startScanner() {
-  if (scanner) return;
   scanner = new Html5Qrcode("reader");
   scanner.start(
     { facingMode: "environment" },
