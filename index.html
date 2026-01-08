@@ -5,7 +5,10 @@
 <title>Ponche QR - Mini Delights</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+<!-- ZXing -->
 <script src="https://unpkg.com/@zxing/library@latest"></script>
+
+<!-- Supabase v2 -->
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
 <style>
@@ -18,7 +21,8 @@ body {
 video {
   width: 100%;
   max-width: 320px;
-  margin: 20px auto;
+  margin: auto;
+  border-radius: 10px;
 }
 button {
   padding: 14px 22px;
@@ -27,6 +31,7 @@ button {
   color: white;
   border: none;
   border-radius: 6px;
+  cursor: pointer;
 }
 #msg {
   margin-top: 15px;
@@ -42,27 +47,40 @@ button {
 
 <button onclick="iniciar()">Abrir Cámara</button>
 
+<br><br>
+
 <video id="video" autoplay muted playsinline></video>
 <div id="msg"></div>
 
 <script>
-const { createClient } = supabaseJs;
+/* ===============================
+   SUPABASE
+================================ */
+const { createClient } = supabase;
 
-const supabase = createClient(
+const supabaseClient = createClient(
   "https://chwrkastzilaixqmjsbu.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNod3JrYXN0emlsYWl4cW1qc2J1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0MzcwOTYsImV4cCI6MjA4MzAxMzA5Nn0.QRimlOzaID5Ldr1CojiZYtqMzAKp2vm93QtzPxLEZ4I"
 );
 
+/* ===============================
+   QR READER
+================================ */
 const codeReader = new ZXing.BrowserQRCodeReader();
 
+/* ===============================
+   INICIAR CÁMARA
+================================ */
 async function iniciar() {
   document.getElementById("msg").innerText = "Abriendo cámara...";
-  try {
-    const devices = await codeReader.listVideoInputDevices();
-    const deviceId = devices[0].deviceId;
 
-    codeReader.decodeFromVideoDevice(
-      deviceId,
+  try {
+    await codeReader.decodeFromConstraints(
+      {
+        video: {
+          facingMode: { exact: "environment" }
+        }
+      },
       "video",
       async (result, err) => {
         if (result) {
@@ -71,29 +89,34 @@ async function iniciar() {
         }
       }
     );
-  } catch (e) {
-    document.getElementById("msg").innerText = "❌ No se pudo abrir la cámara";
+  } catch (error) {
+    console.error(error);
+    document.getElementById("msg").innerText =
+      "❌ No se pudo abrir la cámara. Revisa los permisos.";
   }
 }
 
+/* ===============================
+   PROCESAR QR
+================================ */
 async function procesarQR(qr) {
   document.getElementById("msg").innerText = "Procesando...";
 
-  const { data: emp } = await supabase
+  const { data: emp, error } = await supabaseClient
     .from("employees")
     .select("*")
     .eq("qr_code", qr)
     .single();
 
-  if (!emp) {
+  if (error || !emp) {
     document.getElementById("msg").innerText = "❌ QR inválido";
     iniciar();
     return;
   }
 
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = new Date().toISOString().slice(0, 10);
 
-  const { data: punches } = await supabase
+  const { data: punches } = await supabaseClient
     .from("punches")
     .select("*")
     .eq("employee_id", emp.id)
@@ -101,13 +124,15 @@ async function procesarQR(qr) {
 
   const tipo = (!punches || punches.length === 0) ? "entrada" : "salida";
 
-  await supabase.from("punches").insert({
+  await supabaseClient.from("punches").insert({
     employee_id: emp.id,
     punch_type: tipo
   });
 
   document.getElementById("msg").innerText =
     `✅ ${emp.name} - ${tipo.toUpperCase()} registrada`;
+
+  setTimeout(iniciar, 2000);
 }
 </script>
 
