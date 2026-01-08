@@ -2,137 +2,126 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Ponche QR - Mini Delights</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Ponche QR - Mini Delights</title>
 
-<!-- ZXing -->
-<script src="https://unpkg.com/@zxing/library@latest"></script>
-
-<!-- Supabase v2 -->
+<script src="https://unpkg.com/html5-qrcode"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
 <style>
 body {
   font-family: Arial, sans-serif;
-  text-align: center;
   background: #f4f6f8;
+  text-align: center;
   padding: 20px;
 }
-video {
-  width: 100%;
-  max-width: 320px;
-  margin: auto;
-  border-radius: 10px;
+h2 {
+  margin-bottom: 5px;
+}
+#reader {
+  width: 320px;
+  margin: 20px auto;
 }
 button {
-  padding: 14px 22px;
+  padding: 12px 20px;
   font-size: 16px;
   background: #0d6efd;
   color: white;
   border: none;
   border-radius: 6px;
-  cursor: pointer;
 }
 #msg {
   margin-top: 15px;
   font-weight: bold;
+  font-size: 18px;
 }
 </style>
 </head>
 
 <body>
 
-<h2>📸 Ponche con Código QR</h2>
-<p>Presiona el botón y escanea tu QR</p>
+<h2>📸 Sistema de Ponche</h2>
+<p>Entrada • Almuerzo • Salida</p>
 
-<button onclick="iniciar()">Abrir Cámara</button>
+<button onclick="startScanner()">Abrir Cámara</button>
 
-<br><br>
-
-<video id="video" autoplay muted playsinline></video>
+<div id="reader"></div>
 <div id="msg"></div>
 
 <script>
-/* ===============================
-   SUPABASE
-================================ */
-const { createClient } = supabase;
-
-const supabaseClient = createClient(
+/* 🔑 CONEXIÓN A TU SUPABASE */
+const supabase = supabaseJs.createClient(
   "https://chwrkastzilaixqmjsbu.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNod3JrYXN0emlsYWl4cW1qc2J1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0MzcwOTYsImV4cCI6MjA4MzAxMzA5Nn0.QRimlOzaID5Ldr1CojiZYtqMzAKp2vm93QtzPxLEZ4I"
 );
 
-/* ===============================
-   QR READER
-================================ */
-const codeReader = new ZXing.BrowserQRCodeReader();
+let scanner = null;
 
-/* ===============================
-   INICIAR CÁMARA
-================================ */
-async function iniciar() {
-  document.getElementById("msg").innerText = "Abriendo cámara...";
+async function onScanSuccess(qrText) {
+  document.getElementById("msg").innerText = "⏳ Procesando...";
 
-  try {
-    await codeReader.decodeFromConstraints(
-      {
-        video: {
-          facingMode: { exact: "environment" }
-        }
-      },
-      "video",
-      async (result, err) => {
-        if (result) {
-          codeReader.reset();
-          procesarQR(result.text);
-        }
-      }
-    );
-  } catch (error) {
-    console.error(error);
-    document.getElementById("msg").innerText =
-      "❌ No se pudo abrir la cámara. Revisa los permisos.";
-  }
-}
+  const qr = qrText.trim();
 
-/* ===============================
-   PROCESAR QR
-================================ */
-async function procesarQR(qr) {
-  document.getElementById("msg").innerText = "Procesando...";
-
-  const { data: emp, error } = await supabaseClient
+  const { data: employee } = await supabase
     .from("employees")
     .select("*")
-    .eq("qr_code", qr)
+    .ilike("qr_code", qr)
+    .eq("active", true)
     .single();
 
-  if (error || !emp) {
-    document.getElementById("msg").innerText = "❌ QR inválido";
-    iniciar();
+  if (!employee) {
+    document.getElementById("msg").innerText = "❌ EMPLEADO NO REGISTRADO";
     return;
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
 
-  const { data: punches } = await supabaseClient
+  const { data: punches } = await supabase
     .from("punches")
     .select("*")
-    .eq("employee_id", emp.id)
-    .eq("punch_date", hoy);
+    .eq("employee_id", employee.id)
+    .eq("punch_date", today)
+    .order("created_at");
 
-  const tipo = (!punches || punches.length === 0) ? "entrada" : "salida";
+  let type = "";
 
-  await supabaseClient.from("punches").insert({
-    employee_id: emp.id,
-    punch_type: tipo
+  if (!punches || punches.length === 0) {
+    type = "entrada";
+  } else if (punches.length === 1) {
+    type = "almuerzo_salida";
+  } else if (punches.length === 2) {
+    type = "almuerzo_entrada";
+  } else if (punches.length === 3) {
+    type = "salida";
+  } else {
+    document.getElementById("msg").innerText =
+      "⚠️ Ya completó todos los ponches hoy";
+    return;
+  }
+
+  await supabase.from("punches").insert({
+    employee_id: employee.id,
+    punch_type: type
   });
 
-  document.getElementById("msg").innerText =
-    `✅ ${emp.name} - ${tipo.toUpperCase()} registrada`;
+  const labels = {
+    entrada: "ENTRADA",
+    almuerzo_salida: "SALIDA A ALMUERZO",
+    almuerzo_entrada: "REGRESO DE ALMUERZO",
+    salida: "SALIDA"
+  };
 
-  setTimeout(iniciar, 2000);
+  document.getElementById("msg").innerText =
+    `✅ ${employee.name} – ${labels[type]}`;
+}
+
+function startScanner() {
+  if (scanner) return;
+  scanner = new Html5Qrcode("reader");
+  scanner.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 250 },
+    onScanSuccess
+  );
 }
 </script>
 
