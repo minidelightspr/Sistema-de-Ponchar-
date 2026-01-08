@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Test Cámara Web</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family:Arial;text-align:center;padding:20px;">
+
+<h2>📷 Prueba de Cámara</h2>
+<p>Presiona el botón y acepta el permiso</p>
+
+<button id="btn" style="padding:12px 20px;font-size:16px;">
+Abrir cámara
+</button>
+
+<br><br>
+
+<video id="video" autoplay playsinline style="width:90%;max-width:320px;border:1px solid #ccc;"></video>
+
+<script>
+document.getElementById("btn").addEventListener("click", async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    document.getElementById("video").srcObject = stream;
+  } catch (err) {
+    alert("ERROR: " + err.message);
+  }
+});
+</script>
+
+</body>
+</html>
