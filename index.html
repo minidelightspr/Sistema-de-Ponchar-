@@ -5,7 +5,7 @@
 <title>Ponche QR - Mini Delights</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- ZXing (compatible con iPad / Safari) -->
+<!-- ZXing -->
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 
 <!-- Supabase v2 -->
@@ -88,7 +88,6 @@ async function iniciar() {
       }
     );
   } catch (error) {
-    console.error(error);
     document.getElementById("msg").innerText =
       "❌ No se pudo abrir la cámara. Revisa los permisos.";
   }
@@ -98,6 +97,8 @@ async function iniciar() {
    PROCESAR QR
 ================================ */
 async function procesarQR(qr) {
+  qr = qr.trim().toUpperCase(); // 🔥 LÍNEA CLAVE
+
   document.getElementById("msg").innerText = "Procesando...";
 
   const { data: emp, error } = await supabaseClient
