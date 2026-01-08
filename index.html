@@ -2,143 +2,109 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Payroll - Mini Delights</title>
+<title>Ponche QR - Mini Delights</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<!-- ZXing -->
+<!-- ZXing QR -->
+<script src="https://unpkg.com/@zxing/library@latest"></script>
 
-<style>
-body {
-  font-family: Arial, sans-serif;
-  background: #f4f6f8;
-  padding: 20px;
-}
-h2 {
-  text-align: center;
-}
-table {
+<!-- Supabase v2 -->
+@@ -21,7 +21,6 @@
+video {
   width: 100%;
-  border-collapse: collapse;
-  background: white;
-  margin-top: 20px;
+  max-width: 320px;
+  margin: auto;
+  border-radius: 10px;
 }
-th, td {
-  padding: 10px;
-  border-bottom: 1px solid #ddd;
-  text-align: left;
-}
-th {
-  background: #0d6efd;
+button {
+@@ -31,7 +30,6 @@
   color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
 }
-</style>
-</head>
+#msg {
+  margin-top: 15px;
+@@ -46,7 +44,6 @@
+<p>Presiona el botón y escanea tu QR</p>
 
-<body>
+<button onclick="iniciar()">Abrir Cámara</button>
 
-<h2>📊 Payroll Semanal</h2>
+<br><br>
 
-<table id="tabla">
-  <thead>
-    <tr>
-      <th>Empleado</th>
-      <th>Horas</th>
-      <th>Bruto</th>
-      <th>Deducciones</th>
-      <th>Neto</th>
-      <th>Vacaciones</th>
-      <th>Enfermedad</th>
-      <th>Bono</th>
-      <th>YTD</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
+<video id="video" autoplay muted playsinline></video>
+@@ -75,37 +72,33 @@
+  document.getElementById("msg").innerText = "Abriendo cámara...";
 
-<script>
-const { createClient } = supabase;
-
-/* ===== SUPABASE (YA CONFIGURADO) ===== */
-const supabaseClient = createClient(
-  "https://chwrkastzilaixqmjsbu.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNod3JrYXN0emlsYWl4cW1qc2J1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0MzcwOTYsImV4cCI6MjA4MzAxMzA5Nn0.QRimlOzaID5Ldr1CojiZYtqMzAKp2vm93QtzPxLEZ4I"
-);
-
-/* ===== CAMBIA SOLO LAS FECHAS SI QUIERES ===== */
-const fechaInicio = "2026-01-01";
-const fechaFin = "2026-01-07";
-
-async function cargar() {
-  const { data, error } = await supabaseClient
-    .from("payroll_final")
-    .select(`
-      employee_name,
-      hours_worked,
-      gross_pay,
-      total_deductions,
-      net_pay,
-      employee_balances (
-        vacation_hours,
-        sick_hours,
-        hours_ytd,
-        pay_ytd
-      ),
-      employee_bonus (
-        bonus_accrued
-      )
-    `)
-    .gte("punch_date", fechaInicio)
-    .lte("punch_date", fechaFin);
-
-  if (error) {
-    alert(error.message);
-    return;
+  try {
+    await codeReader.decodeFromConstraints(
+      {
+        video: { facingMode: "environment" }
+      },
+    await codeReader.decodeFromVideoDevice(
+      null,
+      "video",
+      async (result, err) => {
+      (result, err) => {
+        if (result) {
+          codeReader.reset();
+          procesarQR(result.text);
+        }
+      }
+    );
+  } catch (error) {
+  } catch (e) {
+    document.getElementById("msg").innerText =
+      "❌ No se pudo abrir la cámara. Revisa los permisos.";
+      "❌ No se pudo abrir la cámara";
   }
-
-  const tabla = document.querySelector("#tabla tbody");
-  tabla.innerHTML = "";
-
-  const resumen = {};
-
-  data.forEach(r => {
-    if (!resumen[r.employee_name]) {
-      resumen[r.employee_name] = {
-        horas: 0,
-        bruto: 0,
-        ded: 0,
-        neto: 0,
-        vac: r.employee_balances?.vacation_hours || 0,
-        sick: r.employee_balances?.sick_hours || 0,
-        bono: r.employee_bonus?.bonus_accrued || 0,
-        ytd: r.employee_balances?.pay_ytd || 0
-      };
-    }
-
-    resumen[r.employee_name].horas += r.hours_worked;
-    resumen[r.employee_name].bruto += r.gross_pay;
-    resumen[r.employee_name].ded += r.total_deductions;
-    resumen[r.employee_name].neto += r.net_pay;
-  });
-
-  Object.keys(resumen).forEach(nombre => {
-    const r = resumen[nombre];
-    tabla.innerHTML += `
-      <tr>
-        <td>${nombre}</td>
-        <td>${r.horas.toFixed(2)}</td>
-        <td>$${r.bruto.toFixed(2)}</td>
-        <td>$${r.ded.toFixed(2)}</td>
-        <td>$${r.neto.toFixed(2)}</td>
-        <td>${r.vac.toFixed(2)}</td>
-        <td>${r.sick.toFixed(2)}</td>
-        <td>$${r.bono.toFixed(2)}</td>
-        <td>$${r.ytd.toFixed(2)}</td>
-      </tr>
-    `;
-  });
 }
 
-cargar();
+/* ===============================
+   PROCESAR QR
+================================ */
+async function procesarQR(qr) {
+  qr = qr.trim().toUpperCase(); // 🔥 LÍNEA CLAVE
+
+  document.getElementById("msg").innerText = "Procesando...";
+
+  const { data: emp, error } = await supabaseClient
+    .from("employees")
+    .select("id, name")
+    .select("*")
+    .eq("qr_code", qr)
+    .maybeSingle();
+    .single();
+
+  if (error || !emp) {
+    document.getElementById("msg").innerText = "❌ QR inválido";
+@@ -117,23 +110,26 @@
+
+  const { data: punches } = await supabaseClient
+    .from("punches")
+    .select("id")
+    .select("*")
+    .eq("employee_id", emp.id)
+    .eq("punch_date", hoy);
+
+  const tipo = (!punches || punches.length === 0) ? "entrada" : "salida";
+  const tipo = (!punches || punches.length === 0)
+    ? "entrada"
+    : "salida";
+
+  await supabaseClient.from("punches").insert({
+    employee_id: emp.id,
+    employee_name: emp.name,   // ✅ AQUÍ SE GUARDA EL NOMBRE
+    punch_type: tipo
+  });
+
+  document.getElementById("msg").innerText =
+    `✅ ${emp.name} - ${tipo.toUpperCase()} registrada`;
+
+  setTimeout(iniciar, 2000);
+  setTimeout(iniciar, 3000);
+}
 </script>
 
 </body>
