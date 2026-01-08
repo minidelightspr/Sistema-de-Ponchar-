@@ -5,7 +5,7 @@
 <title>Ponche QR - Mini Delights</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- ZXing -->
+<!-- ZXing QR -->
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 
 <!-- Supabase v2 -->
@@ -21,7 +21,6 @@ body {
 video {
   width: 100%;
   max-width: 320px;
-  margin: auto;
   border-radius: 10px;
 }
 button {
@@ -31,7 +30,6 @@ button {
   color: white;
   border: none;
   border-radius: 6px;
-  cursor: pointer;
 }
 #msg {
   margin-top: 15px;
@@ -46,7 +44,6 @@ button {
 <p>Presiona el botón y escanea tu QR</p>
 
 <button onclick="iniciar()">Abrir Cámara</button>
-
 <br><br>
 
 <video id="video" autoplay muted playsinline></video>
@@ -75,21 +72,19 @@ async function iniciar() {
   document.getElementById("msg").innerText = "Abriendo cámara...";
 
   try {
-    await codeReader.decodeFromConstraints(
-      {
-        video: { facingMode: "environment" }
-      },
+    await codeReader.decodeFromVideoDevice(
+      null,
       "video",
-      async (result, err) => {
+      (result, err) => {
         if (result) {
           codeReader.reset();
           procesarQR(result.text);
         }
       }
     );
-  } catch (error) {
+  } catch (e) {
     document.getElementById("msg").innerText =
-      "❌ No se pudo abrir la cámara. Revisa los permisos.";
+      "❌ No se pudo abrir la cámara";
   }
 }
 
@@ -97,15 +92,13 @@ async function iniciar() {
    PROCESAR QR
 ================================ */
 async function procesarQR(qr) {
-  qr = qr.trim().toUpperCase(); // 🔥 LÍNEA CLAVE
-
   document.getElementById("msg").innerText = "Procesando...";
 
   const { data: emp, error } = await supabaseClient
     .from("employees")
-    .select("id, name")
+    .select("*")
     .eq("qr_code", qr)
-    .maybeSingle();
+    .single();
 
   if (error || !emp) {
     document.getElementById("msg").innerText = "❌ QR inválido";
@@ -117,21 +110,24 @@ async function procesarQR(qr) {
 
   const { data: punches } = await supabaseClient
     .from("punches")
-    .select("id")
+    .select("*")
     .eq("employee_id", emp.id)
     .eq("punch_date", hoy);
 
-  const tipo = (!punches || punches.length === 0) ? "entrada" : "salida";
+  const tipo = (!punches || punches.length === 0)
+    ? "entrada"
+    : "salida";
 
   await supabaseClient.from("punches").insert({
     employee_id: emp.id,
+    employee_name: emp.name,   // ✅ AQUÍ SE GUARDA EL NOMBRE
     punch_type: tipo
   });
 
   document.getElementById("msg").innerText =
     `✅ ${emp.name} - ${tipo.toUpperCase()} registrada`;
 
-  setTimeout(iniciar, 2000);
+  setTimeout(iniciar, 3000);
 }
 </script>
 
