@@ -2,133 +2,143 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Ponche QR - Mini Delights</title>
+<title>Payroll - Mini Delights</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- ZXing QR -->
-<script src="https://unpkg.com/@zxing/library@latest"></script>
-
-<!-- Supabase v2 -->
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
 <style>
 body {
   font-family: Arial, sans-serif;
-  text-align: center;
   background: #f4f6f8;
   padding: 20px;
 }
-video {
-  width: 100%;
-  max-width: 320px;
-  border-radius: 10px;
+h2 {
+  text-align: center;
 }
-button {
-  padding: 14px 22px;
-  font-size: 16px;
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  margin-top: 20px;
+}
+th, td {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+}
+th {
   background: #0d6efd;
   color: white;
-  border: none;
-  border-radius: 6px;
-}
-#msg {
-  margin-top: 15px;
-  font-weight: bold;
 }
 </style>
 </head>
 
 <body>
 
-<h2>📸 Ponche con Código QR</h2>
-<p>Presiona el botón y escanea tu QR</p>
+<h2>📊 Payroll Semanal</h2>
 
-<button onclick="iniciar()">Abrir Cámara</button>
-<br><br>
-
-<video id="video" autoplay muted playsinline></video>
-<div id="msg"></div>
+<table id="tabla">
+  <thead>
+    <tr>
+      <th>Empleado</th>
+      <th>Horas</th>
+      <th>Bruto</th>
+      <th>Deducciones</th>
+      <th>Neto</th>
+      <th>Vacaciones</th>
+      <th>Enfermedad</th>
+      <th>Bono</th>
+      <th>YTD</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
 
 <script>
-/* ===============================
-   SUPABASE
-================================ */
 const { createClient } = supabase;
 
+/* ===== SUPABASE (YA CONFIGURADO) ===== */
 const supabaseClient = createClient(
   "https://chwrkastzilaixqmjsbu.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNod3JrYXN0emlsYWl4cW1qc2J1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0MzcwOTYsImV4cCI6MjA4MzAxMzA5Nn0.QRimlOzaID5Ldr1CojiZYtqMzAKp2vm93QtzPxLEZ4I"
 );
 
-/* ===============================
-   QR READER
-================================ */
-const codeReader = new ZXing.BrowserQRCodeReader();
+/* ===== CAMBIA SOLO LAS FECHAS SI QUIERES ===== */
+const fechaInicio = "2026-01-01";
+const fechaFin = "2026-01-07";
 
-/* ===============================
-   INICIAR CÁMARA
-================================ */
-async function iniciar() {
-  document.getElementById("msg").innerText = "Abriendo cámara...";
+async function cargar() {
+  const { data, error } = await supabaseClient
+    .from("payroll_final")
+    .select(`
+      employee_name,
+      hours_worked,
+      gross_pay,
+      total_deductions,
+      net_pay,
+      employee_balances (
+        vacation_hours,
+        sick_hours,
+        hours_ytd,
+        pay_ytd
+      ),
+      employee_bonus (
+        bonus_accrued
+      )
+    `)
+    .gte("punch_date", fechaInicio)
+    .lte("punch_date", fechaFin);
 
-  try {
-    await codeReader.decodeFromVideoDevice(
-      null,
-      "video",
-      (result, err) => {
-        if (result) {
-          codeReader.reset();
-          procesarQR(result.text);
-        }
-      }
-    );
-  } catch (e) {
-    document.getElementById("msg").innerText =
-      "❌ No se pudo abrir la cámara";
-  }
-}
-
-/* ===============================
-   PROCESAR QR
-================================ */
-async function procesarQR(qr) {
-  document.getElementById("msg").innerText = "Procesando...";
-
-  const { data: emp, error } = await supabaseClient
-    .from("employees")
-    .select("*")
-    .eq("qr_code", qr)
-    .single();
-
-  if (error || !emp) {
-    document.getElementById("msg").innerText = "❌ QR inválido";
-    setTimeout(iniciar, 2000);
+  if (error) {
+    alert(error.message);
     return;
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const tabla = document.querySelector("#tabla tbody");
+  tabla.innerHTML = "";
 
-  const { data: punches } = await supabaseClient
-    .from("punches")
-    .select("*")
-    .eq("employee_id", emp.id)
-    .eq("punch_date", hoy);
+  const resumen = {};
 
-  const tipo = (!punches || punches.length === 0)
-    ? "entrada"
-    : "salida";
+  data.forEach(r => {
+    if (!resumen[r.employee_name]) {
+      resumen[r.employee_name] = {
+        horas: 0,
+        bruto: 0,
+        ded: 0,
+        neto: 0,
+        vac: r.employee_balances?.vacation_hours || 0,
+        sick: r.employee_balances?.sick_hours || 0,
+        bono: r.employee_bonus?.bonus_accrued || 0,
+        ytd: r.employee_balances?.pay_ytd || 0
+      };
+    }
 
-  await supabaseClient.from("punches").insert({
-    employee_id: emp.id,
-    employee_name: emp.name,   // ✅ AQUÍ SE GUARDA EL NOMBRE
-    punch_type: tipo
+    resumen[r.employee_name].horas += r.hours_worked;
+    resumen[r.employee_name].bruto += r.gross_pay;
+    resumen[r.employee_name].ded += r.total_deductions;
+    resumen[r.employee_name].neto += r.net_pay;
   });
 
-  document.getElementById("msg").innerText =
-    `✅ ${emp.name} - ${tipo.toUpperCase()} registrada`;
-
-  setTimeout(iniciar, 3000);
+  Object.keys(resumen).forEach(nombre => {
+    const r = resumen[nombre];
+    tabla.innerHTML += `
+      <tr>
+        <td>${nombre}</td>
+        <td>${r.horas.toFixed(2)}</td>
+        <td>$${r.bruto.toFixed(2)}</td>
+        <td>$${r.ded.toFixed(2)}</td>
+        <td>$${r.neto.toFixed(2)}</td>
+        <td>${r.vac.toFixed(2)}</td>
+        <td>${r.sick.toFixed(2)}</td>
+        <td>$${r.bono.toFixed(2)}</td>
+        <td>$${r.ytd.toFixed(2)}</td>
+      </tr>
+    `;
+  });
 }
+
+cargar();
 </script>
 
 </body>
