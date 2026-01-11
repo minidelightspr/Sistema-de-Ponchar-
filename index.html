@@ -21,6 +21,7 @@ body {
 video {
   width: 100%;
   max-width: 320px;
+  margin: auto;
   border-radius: 10px;
 }
 button {
@@ -30,6 +31,7 @@ button {
   color: white;
   border: none;
   border-radius: 6px;
+  cursor: pointer;
 }
 #msg {
   margin-top: 15px;
@@ -69,22 +71,25 @@ const codeReader = new ZXing.BrowserQRCodeReader();
    INICIAR CÁMARA
 ================================ */
 async function iniciar() {
-  document.getElementById("msg").innerText = "Abriendo cámara...";
+  document.getElementById("msg").innerText = "📷 Abriendo cámara...";
 
   try {
-    await codeReader.decodeFromVideoDevice(
-      null,
+    await codeReader.decodeFromConstraints(
+      {
+        video: { facingMode: "environment" }
+      },
       "video",
-      (result, err) => {
+      async (result, err) => {
         if (result) {
           codeReader.reset();
-          procesarQR(result.text);
+          procesarQR(result.text.trim());
         }
       }
     );
-  } catch (e) {
+  } catch (error) {
+    console.error(error);
     document.getElementById("msg").innerText =
-      "❌ No se pudo abrir la cámara";
+      "❌ No se pudo abrir la cámara. Revisa permisos.";
   }
 }
 
@@ -92,11 +97,11 @@ async function iniciar() {
    PROCESAR QR
 ================================ */
 async function procesarQR(qr) {
-  document.getElementById("msg").innerText = "Procesando...";
+  document.getElementById("msg").innerText = "⏳ Procesando...";
 
   const { data: emp, error } = await supabaseClient
     .from("employees")
-    .select("*")
+    .select("id, name")
     .eq("qr_code", qr)
     .single();
 
@@ -110,7 +115,7 @@ async function procesarQR(qr) {
 
   const { data: punches } = await supabaseClient
     .from("punches")
-    .select("*")
+    .select("id")
     .eq("employee_id", emp.id)
     .eq("punch_date", hoy);
 
@@ -120,14 +125,14 @@ async function procesarQR(qr) {
 
   await supabaseClient.from("punches").insert({
     employee_id: emp.id,
-    employee_name: emp.name,   // ✅ AQUÍ SE GUARDA EL NOMBRE
+    employee_name: emp.name,
     punch_type: tipo
   });
 
   document.getElementById("msg").innerText =
-    `✅ ${emp.name} - ${tipo.toUpperCase()} registrada`;
+    `✅ ${emp.name} – ${tipo.toUpperCase()} registrada`;
 
-  setTimeout(iniciar, 3000);
+  setTimeout(iniciar, 2500);
 }
 </script>
 
