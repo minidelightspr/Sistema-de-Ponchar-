@@ -75,11 +75,9 @@ async function iniciar() {
 
   try {
     await codeReader.decodeFromConstraints(
-      {
-        video: { facingMode: "environment" }
-      },
+      { video: { facingMode: "environment" } },
       "video",
-      async (result, err) => {
+      async (result) => {
         if (result) {
           codeReader.reset();
           procesarQR(result.text.trim());
@@ -87,7 +85,6 @@ async function iniciar() {
       }
     );
   } catch (error) {
-    console.error(error);
     document.getElementById("msg").innerText =
       "❌ No se pudo abrir la cámara. Revisa permisos.";
   }
@@ -111,26 +108,23 @@ async function procesarQR(qr) {
     return;
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const { error: punchError } = await supabaseClient.rpc(
+    "punch_employee",
+    {
+      p_employee_id: emp.id,
+      p_punch_type: "AUTO"
+    }
+  );
 
-  const { data: punches } = await supabaseClient
-    .from("punches")
-    .select("id")
-    .eq("employee_id", emp.id)
-    .eq("punch_date", hoy);
-
-  const tipo = (!punches || punches.length === 0)
-    ? "entrada"
-    : "salida";
-
-  await supabaseClient.from("punches").insert({
-    employee_id: emp.id,
-    employee_name: emp.name,
-    punch_type: tipo
-  });
+  if (punchError) {
+    document.getElementById("msg").innerText =
+      `❌ ${punchError.message}`;
+    setTimeout(iniciar, 2500);
+    return;
+  }
 
   document.getElementById("msg").innerText =
-    `✅ ${emp.name} – ${tipo.toUpperCase()} registrada`;
+    `✅ ${emp.name} – ponche registrado`;
 
   setTimeout(iniciar, 2500);
 }
